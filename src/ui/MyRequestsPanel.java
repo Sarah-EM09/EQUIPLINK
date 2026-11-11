@@ -73,8 +73,13 @@ public class MyRequestsPanel extends JPanel {
         search.putClientProperty("JTextField.placeholderText", "Search by code, venue, or equipment");
         search.getDocument().addDocumentListener(UiSupport.documentListener(this::showRequests));
         filters.add(search, BorderLayout.CENTER);
+        dateSort.removeAllItems();
+        dateSort.addItem("Event date (soonest)");
+        dateSort.addItem("Event date (latest)");
+        dateSort.addItem("Newest submitted");
+        dateSort.addItem("Oldest submitted");
         dateSort.setFont(AppTheme.regular(12));
-        dateSort.setPreferredSize(new java.awt.Dimension(150, 40));
+        dateSort.setPreferredSize(new java.awt.Dimension(180, 40));
         dateSort.addActionListener(event -> showRequests());
         dateFilter.addChangeListener(this::showRequests);
         JPanel tools = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 8, 0));
@@ -128,11 +133,28 @@ public class MyRequestsPanel extends JPanel {
                 filtered.add(request);
             }
         }
-        Comparator<BorrowRequest> byDate = Comparator.comparing(BorrowRequest::getSubmittedAt);
-        if (dateSort.getSelectedIndex() == 0) {
-            byDate = byDate.reversed();
+        Comparator<BorrowRequest> cmp;
+        switch (dateSort.getSelectedIndex()) {
+            case 1:
+                cmp = Comparator.comparing(BorrowRequest::getEventDate,
+                        Comparator.nullsLast(Comparator.naturalOrder())).reversed();
+                break;
+            case 2:
+                cmp = Comparator.comparing(BorrowRequest::getSubmittedAt,
+                        Comparator.nullsLast(Comparator.naturalOrder())).reversed();
+                break;
+            case 3:
+                cmp = Comparator.comparing(BorrowRequest::getSubmittedAt,
+                        Comparator.nullsLast(Comparator.naturalOrder()));
+                break;
+            case 0:
+            default:
+                cmp = Comparator.comparing(BorrowRequest::getEventDate,
+                        Comparator.nullsLast(Comparator.naturalOrder()));
+                break;
         }
-        filtered.sort(byDate);
+        filtered.sort(cmp.thenComparing(Comparator.comparing(BorrowRequest::getStartTime,
+                Comparator.nullsLast(Comparator.naturalOrder()))));
         if (filtered.isEmpty()) {
             requestCards.add(messageCard(
                     requests.isEmpty()
@@ -238,9 +260,16 @@ public class MyRequestsPanel extends JPanel {
                         + (request.getEquipmentItems().size() > 1
                                 ? " +" + (request.getEquipmentItems().size() - 1) + " more"
                                 : "");
-        JLabel subtitle = new JLabel(itemSummary + "  ·  " + request.getVenue()
-                + "  ·  " + request.getEventDate().format(
-                        DateTimeFormatter.ofPattern("MMM d, yyyy")));
+        DateTimeFormatter tf = DateTimeFormatter.ofPattern("hh:mm a", java.util.Locale.ENGLISH);
+        String when = request.getEventDate() == null ? "" : request.getEventDate().format(
+                DateTimeFormatter.ofPattern("MMM d, yyyy"));
+        if (request.getStartTime() != null && request.getEndTime() != null) {
+            when += "  " + request.getStartTime().format(tf) + "–" + request.getEndTime().format(tf);
+        }
+        JLabel subtitle = new JLabel("<html><div style='width:520px'>" + escape(itemSummary)
+                + "  ·  " + escape(request.getVenue()) + "<br><b>Schedule:</b> " + escape(when)
+                + "  ·  <b>Status:</b> " + escape(src.ui.UiSupport.displayStatus(request.getStatus()))
+                + "</div></html>");
         subtitle.setFont(AppTheme.regular(11));
         subtitle.setForeground(AppTheme.muted());
         details.add(titleRow);
@@ -267,8 +296,20 @@ public class MyRequestsPanel extends JPanel {
     }
 
     private boolean isEditable(BorrowRequest request) {
-        return "PENDING_STAFF".equals(request.getStatus())
-                || "NEEDS_ACTION".equals(request.getStatus());
+        if ("PENDING_STAFF".equals(request.getStatus()) || "NEEDS_ACTION".equals(request.getStatus())) {
+            return true;
+        }
+        // allow edit/cancel while no provider has assigned any equipment group yet
+        if (request.getEquipmentItems() == null || request.getEquipmentItems().isEmpty()) {
+            return "PENDING_ADMIN".equals(request.getStatus());
+        }
+        boolean noneAssigned = request.getEquipmentItems().stream()
+                .allMatch(i -> i.getAssignedQuantity() <= 0
+                        && (i.getGroupStatus() == null || "PENDING".equals(i.getGroupStatus())
+                                || "UNABLE".equals(i.getGroupStatus()) || "CANCELLED".equals(i.getGroupStatus())));
+        return noneAssigned && !"APPROVED".equals(request.getStatus())
+                && !"RELEASED".equals(request.getStatus()) && !"COMPLETED".equals(request.getStatus())
+                && !"REJECTED".equals(request.getStatus()) && !"CANCELLED".equals(request.getStatus());
     }
 
     private void showDetails(BorrowRequest request) {
@@ -327,5 +368,10 @@ public class MyRequestsPanel extends JPanel {
         requestCards.add(messageCard(message, true));
         requestCards.revalidate();
         requestCards.repaint();
+    }
+
+    private String escape(String text) {
+        if (text == null) return "";
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 }

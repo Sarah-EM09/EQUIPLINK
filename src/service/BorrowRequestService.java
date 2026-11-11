@@ -359,28 +359,31 @@ public class BorrowRequestService {
                 String previousStatus;
                 long groupId;
                 try (PreparedStatement statement = connection.prepareStatement("""
-                        SELECT br.status, br.event_date, br.start_time, br.end_time,
+                        SELECT br.status,
+                               COALESCE(ro.event_date, br.event_date) AS event_date,
+                               COALESCE(ro.start_time, br.start_time) AS start_time,
+                               COALESCE(ro.end_time, br.end_time) AS end_time,
                                rg.group_id, rg.status AS group_status
                         FROM borrow_requests br
                         JOIN request_groups rg ON rg.request_id = br.request_id
-                        WHERE br.request_id = ? AND rg.custodian_role = ?
+                        LEFT JOIN request_occurrences ro ON ro.occurrence_id = rg.occurrence_id
+                        WHERE br.request_id = ? AND rg.custodian_role = ? AND rg.status = 'PENDING'
+                        ORDER BY COALESCE(ro.event_date, br.event_date),
+                                 COALESCE(ro.start_time, br.start_time), rg.group_id
                         FOR UPDATE OF br, rg
                         """)) {
                     statement.setLong(1, requestId);
                     statement.setString(2, normalizedRole);
                     try (ResultSet result = statement.executeQuery()) {
                         if (!result.next()) {
-                            throw new IllegalArgumentException("Request was not found.");
+                            throw new IllegalArgumentException(
+                                    "No pending equipment group was found for this request.");
                         }
                         previousStatus = result.getString("status");
                         if (!"PENDING_STAFF".equals(previousStatus)
                                 && !"NEEDS_ACTION".equals(previousStatus)) {
                             throw new IllegalArgumentException(
                                     "This request is no longer waiting for staff review.");
-                        }
-                        if (!"PENDING".equals(result.getString("group_status"))) {
-                            throw new IllegalArgumentException(
-                                    "This equipment group was already processed.");
                         }
                         groupId = result.getLong("group_id");
                         eventDate = result.getDate("event_date").toLocalDate();
@@ -529,24 +532,22 @@ public class BorrowRequestService {
                         SELECT br.status, rg.group_id, rg.status AS group_status
                         FROM borrow_requests br
                         JOIN request_groups rg ON rg.request_id = br.request_id
-                        WHERE br.request_id = ? AND rg.custodian_role = ?
+                        LEFT JOIN request_occurrences ro ON ro.occurrence_id = rg.occurrence_id
+                        WHERE br.request_id = ? AND rg.custodian_role = ? AND rg.status = 'PENDING'
+                        ORDER BY COALESCE(ro.event_date, br.event_date), COALESCE(ro.start_time, br.start_time), rg.group_id
                         FOR UPDATE OF br, rg
                         """)) {
                     statement.setLong(1, requestId);
                     statement.setString(2, normalizedRole);
                     try (ResultSet result = statement.executeQuery()) {
                         if (!result.next()) {
-                            throw new IllegalArgumentException("Request was not found.");
+                            throw new IllegalArgumentException("No pending equipment group was found.");
                         }
                         previousStatus = result.getString("status");
                         if (!"PENDING_STAFF".equals(previousStatus)
                                 && !"NEEDS_ACTION".equals(previousStatus)) {
                             throw new IllegalArgumentException(
                                     "This request is no longer waiting for staff review.");
-                        }
-                        if (!"PENDING".equals(result.getString("group_status"))) {
-                            throw new IllegalArgumentException(
-                                    "This equipment group was already processed.");
                         }
                         groupId = result.getLong("group_id");
                     }
@@ -629,18 +630,24 @@ public class BorrowRequestService {
                 String requestStatus;
                 String groupStatus;
                 String issues = null;
+                String wantedGroup = release ? "ASSIGNED" : "RELEASED";
                 try (PreparedStatement statement = connection.prepareStatement("""
                         SELECT br.status, rg.group_id, rg.status AS group_status
                         FROM borrow_requests br
                         JOIN request_groups rg ON rg.request_id = br.request_id
-                        WHERE br.request_id = ? AND rg.custodian_role = ?
+                        LEFT JOIN request_occurrences ro ON ro.occurrence_id = rg.occurrence_id
+                        WHERE br.request_id = ? AND rg.custodian_role = ? AND rg.status = ?
+                        ORDER BY COALESCE(ro.event_date, br.event_date), COALESCE(ro.start_time, br.start_time), rg.group_id
                         FOR UPDATE OF br, rg
                         """)) {
                     statement.setLong(1, requestId);
                     statement.setString(2, normalizedRole);
+                    statement.setString(3, wantedGroup);
                     try (ResultSet result = statement.executeQuery()) {
                         if (!result.next()) {
-                            throw new IllegalArgumentException("Request was not found.");
+                            throw new IllegalArgumentException(
+                                    release ? "No assigned equipment group is ready for release."
+                                            : "No released equipment group is ready for return inspection.");
                         }
                         requestStatus = result.getString("status");
                         groupId = result.getLong("group_id");
@@ -1384,57 +1391,13 @@ public class BorrowRequestService {
         return groups;
     }
 
+    @SuppressWarnings("unused")
     private Map<String, Long> prepareGroupsForEdit(
             Connection connection,
             long requestId,
             Map<Long, EquipmentRecord> equipment) throws SQLException {
-        Map<String, Long> groups = new HashMap<>();
-        try (PreparedStatement statement = connection.prepareStatement("""
-                SELECT group_id, custodian_role, status
-                FROM request_groups
-                WHERE request_id = ?
-                FOR UPDATE
-                """)) {
-            statement.setLong(1, requestId);
-            try (ResultSet result = statement.executeQuery()) {
-                while (result.next()) {
-                    groups.put(result.getString("custodian_role"),
-                            result.getLong("group_id"));
-                }
-            }
-        }
-
-        Set<String> usedRoles = new HashSet<>();
-        for (EquipmentRecord record : equipment.values()) {
-            if (usedRoles.add(record.custodianRole)
-                    && !groups.containsKey(record.custodianRole)) {
-                groups.put(record.custodianRole,
-                        insertGroup(connection, requestId, record.custodianRole));
-            }
-        }
-
-        for (Map.Entry<String, Long> entry : groups.entrySet()) {
-            if (usedRoles.contains(entry.getKey())) {
-                try (PreparedStatement statement = connection.prepareStatement("""
-                        UPDATE request_groups
-                        SET status = 'PENDING', cancelled_by = NULL, cancelled_at = NULL
-                        WHERE group_id = ?
-                        """)) {
-                    statement.setLong(1, entry.getValue());
-                    statement.executeUpdate();
-                }
-            } else {
-                try (PreparedStatement statement = connection.prepareStatement("""
-                        UPDATE request_groups
-                        SET status = 'CANCELLED'
-                        WHERE group_id = ? AND status IN ('PENDING', 'UNABLE')
-                        """)) {
-                    statement.setLong(1, entry.getValue());
-                    statement.executeUpdate();
-                }
-            }
-        }
-        return groups;
+        // Legacy path retained for compatibility; edit flow now recreates occurrences/groups.
+        return Map.of();
     }
 
     private long insertGroup(Connection connection, long requestId, Long occurrenceId, String role)

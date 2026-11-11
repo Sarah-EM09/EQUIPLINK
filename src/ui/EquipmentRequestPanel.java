@@ -122,27 +122,21 @@ public class EquipmentRequestPanel extends JPanel {
         position.setText("Borrower");
         purpose.setLineWrap(true);
         purpose.setWrapStyleWord(true);
-        venue.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
-            private boolean adjusting;
-            private void upper() {
-                if (adjusting) return;
-                String t = venue.getText();
-                String u = t == null ? "" : t.toUpperCase(Locale.ROOT);
-                if (!u.equals(t)) {
-                    adjusting = true;
-                    try {
-                        int pos = venue.getCaretPosition();
-                        venue.setText(u);
-                        venue.setCaretPosition(Math.min(pos, u.length()));
-                    } finally {
-                        adjusting = false;
-                    }
-                }
-            }
-            @Override public void insertUpdate(javax.swing.event.DocumentEvent e) { upper(); }
-            @Override public void removeUpdate(javax.swing.event.DocumentEvent e) { upper(); }
-            @Override public void changedUpdate(javax.swing.event.DocumentEvent e) { upper(); }
-        });
+        if (venue.getDocument() instanceof javax.swing.text.AbstractDocument) {
+            ((javax.swing.text.AbstractDocument) venue.getDocument()).setDocumentFilter(
+                    new javax.swing.text.DocumentFilter() {
+                        @Override
+                        public void insertString(FilterBypass fb, int offset, String string,
+                                javax.swing.text.AttributeSet attr) throws javax.swing.text.BadLocationException {
+                            super.insertString(fb, offset, string == null ? null : string.toUpperCase(Locale.ROOT), attr);
+                        }
+                        @Override
+                        public void replace(FilterBypass fb, int offset, int length, String text,
+                                javax.swing.text.AttributeSet attrs) throws javax.swing.text.BadLocationException {
+                            super.replace(fb, offset, length, text == null ? null : text.toUpperCase(Locale.ROOT), attrs);
+                        }
+                    });
+        }
 
         if (existingRequest != null) {
             venue.setText(existingRequest.getVenue() == null ? ""
