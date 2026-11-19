@@ -1,6 +1,7 @@
 package src.service;
 
 import src.database.Database;
+import src.database.Sql;
 import src.model.BorrowRequest;
 import src.model.BorrowRequestForm;
 import src.model.DepartmentStatus;
@@ -149,7 +150,7 @@ public abstract class BorrowRequestServicePart1 {
     String lockRequestStatus(Connection connection, long requestId) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "SELECT status FROM borrow_requests "
-                        + "WHERE request_id = ? AND deleted_at IS NULL FOR UPDATE")) {
+                        + "WHERE request_id = ? AND deleted_at IS NULL")) {
             statement.setLong(1, requestId);
             try (ResultSet result = statement.executeQuery()) {
                 if (!result.next()) {
@@ -168,7 +169,6 @@ public abstract class BorrowRequestServicePart1 {
         if (borrowerId != null) {
             sql += " AND borrower_id = ?";
         }
-        sql += " FOR UPDATE";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setLong(1, requestId);
             if (borrowerId != null) {
@@ -193,14 +193,14 @@ public abstract class BorrowRequestServicePart1 {
                         + "COALESCE(ro.start_time, br.start_time) AS start_time, COALESCE(ro.end_time, br.end_time) AS end_time "
                         + "FROM request_groups rg JOIN borrow_requests br ON br.request_id=rg.request_id "
                         + "LEFT JOIN request_occurrences ro ON ro.occurrence_id=rg.occurrence_id "
-                        + "WHERE rg.request_id=? ORDER BY 3,4,rg.group_id FOR UPDATE OF rg")) {
+                        + "WHERE rg.request_id=? ORDER BY 3,4,rg.group_id")) {
             statement.setLong(1, requestId);
             try (ResultSet result = statement.executeQuery()) {
                 while (result.next()) {
                     groups.add(new GroupRow(result.getLong("group_id"), result.getString("status"),
-                            result.getDate("event_date").toLocalDate(),
-                            result.getTime("start_time").toLocalTime(),
-                            result.getTime("end_time").toLocalTime()));
+                            Sql.getDate(result, "event_date").toLocalDate(),
+                            Sql.getTime(result, "start_time").toLocalTime(),
+                            Sql.getTime(result, "end_time").toLocalTime()));
                 }
             }
         }
@@ -217,7 +217,6 @@ public abstract class BorrowRequestServicePart1 {
                 SELECT status
                 FROM borrow_requests
                 WHERE request_id = ? AND borrower_id = ? AND deleted_at IS NULL
-                FOR UPDATE
                 """)) {
             statement.setLong(1, requestId);
             statement.setLong(2, borrowerId);
@@ -232,7 +231,7 @@ public abstract class BorrowRequestServicePart1 {
 
     void touchRequest(Connection connection, long requestId) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
-                "UPDATE borrow_requests SET updated_at = CURRENT_TIMESTAMP WHERE request_id = ?")) {
+                "UPDATE borrow_requests SET updated_at = datetime('now', '+8 hours') WHERE request_id = ?")) {
             statement.setLong(1, requestId);
             statement.executeUpdate();
         }
@@ -252,7 +251,6 @@ public abstract class BorrowRequestServicePart1 {
                 LEFT JOIN request_occurrences ro ON ro.occurrence_id = rg.occurrence_id
                 WHERE rg.request_id = ? AND rg.custodian_role = ?
                 ORDER BY 3, 4, rg.group_id
-                FOR UPDATE OF rg
                 """)) {
             statement.setLong(1, requestId);
             statement.setString(2, role);
@@ -261,9 +259,9 @@ public abstract class BorrowRequestServicePart1 {
                     groups.add(new GroupRow(
                             result.getLong("group_id"),
                             result.getString("status"),
-                            result.getDate("event_date").toLocalDate(),
-                            result.getTime("start_time").toLocalTime(),
-                            result.getTime("end_time").toLocalTime()));
+                            Sql.getDate(result, "event_date").toLocalDate(),
+                            Sql.getTime(result, "start_time").toLocalTime(),
+                            Sql.getTime(result, "end_time").toLocalTime()));
                 }
             }
         }
@@ -277,7 +275,6 @@ public abstract class BorrowRequestServicePart1 {
                 SELECT requested_equipment_id, requested_quantity
                 FROM request_items
                 WHERE group_id = ?
-                FOR UPDATE
                 """)) {
             statement.setLong(1, groupId);
             try (ResultSet result = statement.executeQuery()) {

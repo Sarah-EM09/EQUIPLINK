@@ -167,26 +167,26 @@ public class EquipmentService {
 
     public int countReservedUnitsToday(String role) throws SQLException {
         return countEquipmentValue(role, """
-                SELECT COALESCE(SUM(GREATEST(ri.assigned_quantity - ri.released_quantity, 0)), 0)
+                SELECT COALESCE(SUM(MAX(ri.assigned_quantity - ri.released_quantity, 0)), 0)
                 FROM request_items ri
                 JOIN request_groups rg ON rg.group_id = ri.group_id
                 JOIN borrow_requests br ON br.request_id = ri.request_id
                 LEFT JOIN request_occurrences ro ON ro.occurrence_id = rg.occurrence_id
                 WHERE rg.custodian_role = ? AND rg.status = 'ASSIGNED'
                   AND br.status IN ('APPROVED', 'RELEASED')
-                  AND COALESCE(ro.event_date, br.event_date) = CURRENT_DATE
+                  AND COALESCE(ro.event_date, br.event_date) = date('now', '+8 hours')
                 """);
     }
 
     public int countInUseUnitsToday(String role) throws SQLException {
         return countEquipmentValue(role, """
-                SELECT COALESCE(SUM(GREATEST(ri.released_quantity - ri.returned_quantity, 0)), 0)
+                SELECT COALESCE(SUM(MAX(ri.released_quantity - ri.returned_quantity, 0)), 0)
                 FROM request_items ri
                 JOIN request_groups rg ON rg.group_id = ri.group_id
                 JOIN borrow_requests br ON br.request_id = ri.request_id
                 LEFT JOIN request_occurrences ro ON ro.occurrence_id = rg.occurrence_id
                 WHERE rg.custodian_role = ? AND rg.status = 'RELEASED'
-                  AND COALESCE(ro.event_date, br.event_date) = CURRENT_DATE
+                  AND COALESCE(ro.event_date, br.event_date) = date('now', '+8 hours')
                 """);
     }
 
@@ -251,7 +251,7 @@ public class EquipmentService {
     /** Units currently out with borrowers (released and not yet returned). */
     private static final String IN_USE_SQL = """
             COALESCE((
-                SELECT SUM(GREATEST(ri.released_quantity - ri.returned_quantity
+                SELECT SUM(MAX(ri.released_quantity - ri.returned_quantity
                         - ri.missing_quantity, 0))
                 FROM request_items ri
                 JOIN request_groups rg ON rg.group_id = ri.group_id
@@ -262,7 +262,7 @@ public class EquipmentService {
 
     /** Units on hand: usable stock minus units currently released to borrowers. */
     private static final String ON_HAND_SQL =
-            "GREATEST(e.total_quantity - e.damaged_quantity - e.lost_quantity - "
+            "MAX(e.total_quantity - e.damaged_quantity - e.lost_quantity - "
                     + IN_USE_SQL + ", 0)";
 
     /** Current location, derived from equipment status and released/borrowed transactions. */
@@ -277,9 +277,9 @@ public class EquipmentService {
                     LEFT JOIN request_occurrences ro ON ro.occurrence_id = rg.occurrence_id
                     WHERE ri.assigned_equipment_id = e.equipment_id
                       AND rg.status = 'RELEASED'
-                      AND COALESCE(ro.event_date, br.event_date)
-                          + COALESCE(ro.end_time, br.end_time)
-                          < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila')::timestamp
+                      AND COALESCE(ro.event_date, br.event_date) || ' '
+                          || COALESCE(ro.end_time, br.end_time)
+                          < datetime('now', '+8 hours')
                 ) THEN 'Under Inspection'
                 WHEN EXISTS (
                     SELECT 1 FROM request_items ri

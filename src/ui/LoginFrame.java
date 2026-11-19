@@ -166,7 +166,19 @@ public class LoginFrame extends LoginFramePart1 {
         );
 
         form.add(passwordHelp);
-        form.add(Box.createVerticalStrut(22));
+
+        // Administrators who saved recovery codes can reset without another approver.
+        JButton recoveryCode = new JButton("Admin? Use a recovery code");
+        styleLink(recoveryCode);
+        recoveryCode.addActionListener(event ->
+                new RecoveryCodeLoginDialog(this, authController).setVisible(true));
+        JPanel recoveryRow = new JPanel(new BorderLayout());
+        recoveryRow.setOpaque(false);
+        recoveryRow.add(recoveryCode, BorderLayout.EAST);
+        recoveryRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        recoveryRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 25));
+        form.add(recoveryRow);
+        form.add(Box.createVerticalStrut(16));
 
         // Login button
         loginButton.setAlignmentX(Component.LEFT_ALIGNMENT);

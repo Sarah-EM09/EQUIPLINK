@@ -28,6 +28,10 @@ import java.util.concurrent.TimeUnit;
 public class Main {
 
     public static void main(String[] args) throws Exception {
+        if (args.length >= 1 && "--reset-password".equals(args[0])) {
+            EmergencyReset.run(args);
+            return;
+        }
 
         SwingUtilities.invokeAndWait(src.ui.AppTheme::install);
 
@@ -166,5 +170,35 @@ public class Main {
                     equipmentController, notificationController);
         });
         frame.setVisible(true);
+        requirePasswordChangeIfNeeded(user, authController, frame, () -> {
+            frame.dispose();
+            showLogin(authController, requestController,
+                    equipmentController, notificationController);
+        });
+    }
+
+    /**
+     * After an emergency reset the account holds a temporary password; make the user
+     * choose a new one before working. Closing without changing signs them out.
+     */
+    private static void requirePasswordChangeIfNeeded(
+            User user, AuthController authController, JFrame frame, Runnable signOut) {
+        try {
+            if (!authController.mustChangePassword(user)) {
+                return;
+            }
+            UiSupport.showMessageDialog(frame,
+                    "You signed in with a temporary password.\nChoose a new password to continue.",
+                    "Change your password", JOptionPane.INFORMATION_MESSAGE);
+            new src.ui.PasswordChangeDialog(frame, user.getUserId(), authController).setVisible(true);
+            if (authController.mustChangePassword(user)) {
+                UiSupport.showMessageDialog(frame,
+                        "Your password was not changed, so you have been signed out.",
+                        "Signed out", JOptionPane.WARNING_MESSAGE);
+                signOut.run();
+            }
+        } catch (Exception exception) {
+            exception.printStackTrace();
+        }
     }
 }

@@ -1,6 +1,7 @@
 package src.service;
 
 import src.database.Database;
+import src.database.Sql;
 import src.model.BorrowRequest;
 import src.model.BorrowRequestForm;
 import src.model.DepartmentStatus;
@@ -89,7 +90,7 @@ public abstract class BorrowRequestServicePart7 extends BorrowRequestServicePart
                             purpose = ?, participants = ?, person_in_charge = ?,
                             position = ?, status = 'PENDING_STAFF', remarks = NULL,
                             admin_status = NULL, director_status = NULL,
-                            updated_at = CURRENT_TIMESTAMP
+                            updated_at = datetime('now', '+8 hours')
                         WHERE request_id = ? AND borrower_id = ?
                         """;
                 try (PreparedStatement statement = connection.prepareStatement(updateSql)) {
@@ -145,9 +146,9 @@ public abstract class BorrowRequestServicePart7 extends BorrowRequestServicePart
                     BorrowRequestBuilder b = builders.get(rs.getLong("request_id"));
                     if (b != null) b.occurrences.add(new RequestOccurrence(
                             rs.getLong("occurrence_id"), rs.getLong("request_id"),
-                            rs.getDate("event_date").toLocalDate(),
-                            rs.getTime("start_time").toLocalTime(),
-                            rs.getTime("end_time").toLocalTime(),
+                            Sql.getDate(rs, "event_date").toLocalDate(),
+                            Sql.getTime(rs, "start_time").toLocalTime(),
+                            Sql.getTime(rs, "end_time").toLocalTime(),
                             rs.getString("venue")));
                 }
             }
@@ -168,7 +169,6 @@ public abstract class BorrowRequestServicePart7 extends BorrowRequestServicePart
                        status, custodian_role, total_quantity
                 FROM equipment
                 WHERE equipment_id = ? AND active = TRUE
-                FOR UPDATE
                 """;
 
         for (long id : ids) {
@@ -290,9 +290,9 @@ public abstract class BorrowRequestServicePart7 extends BorrowRequestServicePart
             borrowerId = result.getLong("borrower_id");
             borrowerName = result.getString("borrower_name");
             venue = result.getString("venue");
-            eventDate = result.getDate("event_date").toLocalDate();
-            startTime = result.getTime("start_time").toLocalTime();
-            endTime = result.getTime("end_time").toLocalTime();
+            eventDate = Sql.getDate(result, "event_date").toLocalDate();
+            startTime = Sql.getTime(result, "start_time").toLocalTime();
+            endTime = Sql.getTime(result, "end_time").toLocalTime();
             purpose = result.getString("purpose");
             participants = result.getString("participants");
             personInCharge = result.getString("person_in_charge");
@@ -301,7 +301,7 @@ public abstract class BorrowRequestServicePart7 extends BorrowRequestServicePart
             remarks = result.getString("remarks");
             adminStatus = result.getString("admin_status");
             directorStatus = result.getString("director_status");
-            submittedAt = result.getTimestamp("submitted_at").toLocalDateTime();
+            submittedAt = Sql.getTimestamp(result, "submitted_at").toLocalDateTime();
         }
 
         void addItem(EquipmentRequestItem item) {

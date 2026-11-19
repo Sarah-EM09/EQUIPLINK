@@ -1,6 +1,7 @@
 package src.service;
 
 import src.database.Database;
+import src.database.Sql;
 import src.model.BorrowRequest;
 import src.model.BorrowRequestForm;
 import src.model.DepartmentStatus;
@@ -47,11 +48,11 @@ public abstract class BorrowRequestServicePart4 extends BorrowRequestServicePart
                 String previousStatus = lockOwnRequestForDeletion(connection, borrowerId, requestId);
                 try (PreparedStatement statement = connection.prepareStatement("""
                         UPDATE borrow_requests
-                        SET deleted_at = CURRENT_TIMESTAMP,
+                        SET deleted_at = datetime('now', '+8 hours'),
                             deleted_by = ?,
                             deletion_reason = ?,
                             status_before_delete = ?,
-                            updated_at = CURRENT_TIMESTAMP
+                            updated_at = datetime('now', '+8 hours')
                         WHERE request_id = ? AND borrower_id = ? AND deleted_at IS NULL
                         """)) {
                     statement.setLong(1, borrowerId);
@@ -95,11 +96,11 @@ public abstract class BorrowRequestServicePart4 extends BorrowRequestServicePart
                 String previousStatus = lockRequestStatus(connection, requestId);
                 try (PreparedStatement statement = connection.prepareStatement("""
                         UPDATE borrow_requests
-                        SET deleted_at = CURRENT_TIMESTAMP,
+                        SET deleted_at = datetime('now', '+8 hours'),
                             deleted_by = ?,
                             deletion_reason = ?,
                             status_before_delete = ?,
-                            updated_at = CURRENT_TIMESTAMP
+                            updated_at = datetime('now', '+8 hours')
                         WHERE request_id = ? AND deleted_at IS NULL
                         """)) {
                     statement.setLong(1, actorId);
@@ -145,7 +146,7 @@ public abstract class BorrowRequestServicePart4 extends BorrowRequestServicePart
                 Timestamp deletedAt;
                 String selectSql = "SELECT status, status_before_delete, deleted_at "
                         + "FROM borrow_requests WHERE request_id = ?"
-                        + (mustOwn ? " AND borrower_id = ?" : "") + " FOR UPDATE";
+                        + (mustOwn ? " AND borrower_id = ?" : "");
                 try (PreparedStatement statement = connection.prepareStatement(selectSql)) {
                     statement.setLong(1, requestId);
                     if (mustOwn) {
@@ -157,7 +158,7 @@ public abstract class BorrowRequestServicePart4 extends BorrowRequestServicePart
                         }
                         status = result.getString("status");
                         previousStatus = result.getString("status_before_delete");
-                        deletedAt = result.getTimestamp("deleted_at");
+                        deletedAt = Sql.getTimestamp(result, "deleted_at");
                     }
                 }
                 if (deletedAt == null) {
@@ -172,7 +173,7 @@ public abstract class BorrowRequestServicePart4 extends BorrowRequestServicePart
 
                 String updateSql = "UPDATE borrow_requests "
                         + "SET deleted_at = NULL, deleted_by = NULL, deletion_reason = NULL, "
-                        + "status_before_delete = NULL, updated_at = CURRENT_TIMESTAMP "
+                        + "status_before_delete = NULL, updated_at = datetime('now', '+8 hours') "
                         + "WHERE request_id = ? AND deleted_at IS NOT NULL"
                         + (mustOwn ? " AND borrower_id = ?" : "");
                 try (PreparedStatement statement = connection.prepareStatement(updateSql)) {
@@ -272,7 +273,7 @@ public abstract class BorrowRequestServicePart4 extends BorrowRequestServicePart
                 try (PreparedStatement statement = connection.prepareStatement("""
                         UPDATE request_groups
                         SET status = 'ASSIGNED', assigned_by = ?,
-                            assigned_at = CURRENT_TIMESTAMP, staff_remarks = NULL,
+                            assigned_at = datetime('now', '+8 hours'), staff_remarks = NULL,
                             declined_by = NULL, declined_at = NULL, overdue_notified = FALSE
                         WHERE group_id IN (%s) AND status = 'PENDING'
                         """.formatted(placeholders(pending.size())))) {

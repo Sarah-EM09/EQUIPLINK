@@ -1,6 +1,7 @@
 package src.service;
 
 import src.database.Database;
+import src.database.Sql;
 import src.model.Notification;
 import src.model.RequestStatus;
 import src.util.UndoPolicy;
@@ -42,7 +43,7 @@ public abstract class NotificationServicePart1 {
         try (Connection connection = Database.getConnection();
                 PreparedStatement statement = connection.prepareStatement("""
                         UPDATE notifications
-                        SET is_read = TRUE, read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
+                        SET is_read = TRUE, read_at = COALESCE(read_at, datetime('now', '+8 hours'))
                         WHERE notification_id = ? AND user_id = ? AND is_deleted = FALSE
                         """)) {
             statement.setLong(1, notificationId);
@@ -57,7 +58,7 @@ public abstract class NotificationServicePart1 {
         try (Connection connection = Database.getConnection();
                 PreparedStatement statement = connection.prepareStatement("""
                         UPDATE notifications
-                        SET is_read = TRUE, read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
+                        SET is_read = TRUE, read_at = COALESCE(read_at, datetime('now', '+8 hours'))
                         WHERE user_id = ? AND is_read = FALSE AND is_deleted = FALSE
                         """)) {
             statement.setLong(1, userId);
@@ -76,7 +77,7 @@ public abstract class NotificationServicePart1 {
                         UPDATE notifications
                         SET read_before_delete = is_read,
                             is_deleted = TRUE,
-                            deleted_at = CURRENT_TIMESTAMP,
+                            deleted_at = datetime('now', '+8 hours'),
                             is_read = TRUE
                         WHERE notification_id = ? AND user_id = ? AND is_deleted = FALSE
                         """)) {
@@ -95,7 +96,7 @@ public abstract class NotificationServicePart1 {
                         UPDATE notifications
                         SET read_before_delete = is_read,
                             is_deleted = TRUE,
-                            deleted_at = CURRENT_TIMESTAMP,
+                            deleted_at = datetime('now', '+8 hours'),
                             is_read = TRUE
                         WHERE user_id = ? AND is_deleted = FALSE
                         """)) {
@@ -117,7 +118,7 @@ public abstract class NotificationServicePart1 {
                             is_read = COALESCE(read_before_delete, FALSE),
                             read_before_delete = NULL
                         WHERE notification_id = ? AND user_id = ? AND is_deleted = TRUE
-                          AND deleted_at >= CURRENT_TIMESTAMP - """
+                          AND deleted_at >= """
                         + UndoPolicy.RECOVERY_SQL + """
                          """)) {
             statement.setLong(1, notificationId);
@@ -143,7 +144,7 @@ public abstract class NotificationServicePart1 {
                     is_read = COALESCE(read_before_delete, FALSE),
                     read_before_delete = NULL
                 WHERE user_id = ? AND is_deleted = TRUE
-                  AND deleted_at >= CURRENT_TIMESTAMP - """
+                  AND deleted_at >= """
                 + UndoPolicy.RECOVERY_SQL + " AND notification_id IN (");
         for (int i = 0; i < notificationIds.size(); i++) {
             sql.append(i == 0 ? "?" : ", ?");
@@ -174,7 +175,7 @@ public abstract class NotificationServicePart1 {
         try (Connection connection = Database.getConnection();
                 PreparedStatement statement = connection.prepareStatement("""
                         SELECT (SELECT COALESCE(MAX(history_id), 0) FROM request_history),
-                               (SELECT COALESCE(MAX(updated_at), TIMESTAMP '1970-01-01')
+                               (SELECT COALESCE(MAX(updated_at), '1970-01-01 00:00:00')
                                   FROM borrow_requests),
                                (SELECT COUNT(*) FROM borrow_requests),
                                (SELECT COALESCE(MAX(notification_id), 0) FROM notifications
@@ -189,7 +190,7 @@ public abstract class NotificationServicePart1 {
             statement.setLong(3, userId);
             try (ResultSet result = statement.executeQuery()) {
                 result.next();
-                return result.getLong(1) + "|" + result.getTimestamp(2) + "|"
+                return result.getLong(1) + "|" + Sql.getTimestamp(result, 2) + "|"
                         + result.getLong(3) + "|" + result.getLong(4) + "|"
                         + result.getLong(5) + "|" + result.getLong(6);
             }

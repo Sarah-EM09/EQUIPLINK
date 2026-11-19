@@ -1,6 +1,7 @@
 package src.service;
 
 import src.database.Database;
+import src.database.Sql;
 import src.model.Notification;
 import src.model.RequestStatus;
 import src.util.UndoPolicy;
@@ -30,17 +31,23 @@ public class NotificationService extends NotificationServicePart2 {
                 SELECT n.notification_id, n.user_id, n.request_id, n.title,
                        n.message, n.is_read, n.created_at, n.department, n.action,
                        br.event_date, br.request_code, br.status AS request_status,
-                       COALESCE(string_agg(DISTINCT e.equipment_name, ', '), '') AS equipment_names,
-                       COALESCE(string_agg(DISTINCT e.category, ', '), '') AS equipment_categories
+                       COALESCE((SELECT group_concat(name, ', ') FROM (
+                           SELECT DISTINCT e.equipment_name AS name
+                           FROM request_items ri
+                           JOIN equipment e ON e.equipment_id = COALESCE(
+                                   ri.assigned_equipment_id, ri.requested_equipment_id)
+                           WHERE ri.request_id = br.request_id
+                           ORDER BY name)), '') AS equipment_names,
+                       COALESCE((SELECT group_concat(name, ', ') FROM (
+                           SELECT DISTINCT e.category AS name
+                           FROM request_items ri
+                           JOIN equipment e ON e.equipment_id = COALESCE(
+                                   ri.assigned_equipment_id, ri.requested_equipment_id)
+                           WHERE ri.request_id = br.request_id
+                           ORDER BY name)), '') AS equipment_categories
                 FROM notifications n
                 LEFT JOIN borrow_requests br ON br.request_id = n.request_id
-                LEFT JOIN request_items ri ON ri.request_id = br.request_id
-                LEFT JOIN equipment e ON e.equipment_id = COALESCE(
-                        ri.assigned_equipment_id, ri.requested_equipment_id)
                 WHERE n.user_id = ? AND n.is_deleted = FALSE
-                GROUP BY n.notification_id, n.user_id, n.request_id, n.title,
-                         n.message, n.is_read, n.created_at, n.department, n.action,
-                         br.event_date, br.request_code, br.status
                 ORDER BY n.created_at DESC, n.notification_id DESC
                 LIMIT 200
                 """;
@@ -48,13 +55,12 @@ public class NotificationService extends NotificationServicePart2 {
         try (Connection connection = Database.getConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setLong(1, userId);
-            Calendar manila = Calendar.getInstance(TimeZone.getTimeZone("Asia/Manila"));
             try (ResultSet result = statement.executeQuery()) {
                 while (result.next()) {
                     long requestId = result.getLong("request_id");
                     Long nullableRequestId = result.wasNull() ? null : requestId;
-                    java.sql.Date eventDate = result.getDate("event_date");
-                    java.sql.Timestamp created = result.getTimestamp("created_at", manila);
+                    java.sql.Date eventDate = Sql.getDate(result, "event_date");
+                    java.sql.Timestamp created = Sql.getTimestamp(result, "created_at");
                     notifications.add(new Notification(
                             result.getLong("notification_id"),
                             result.getLong("user_id"),

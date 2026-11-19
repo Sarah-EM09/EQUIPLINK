@@ -92,7 +92,7 @@ public abstract class BorrowRequestServicePart6 extends BorrowRequestServicePart
                     try (PreparedStatement statement = connection.prepareStatement("""
                             UPDATE request_groups
                             SET status = 'RELEASED', released_by = ?,
-                                released_at = CURRENT_TIMESTAMP
+                                released_at = datetime('now', '+8 hours')
                             WHERE group_id = ? AND status = 'ASSIGNED'
                             """)) {
                         statement.setLong(1, actorId);
@@ -115,7 +115,7 @@ public abstract class BorrowRequestServicePart6 extends BorrowRequestServicePart
                     try (PreparedStatement statement = connection.prepareStatement("""
                             UPDATE request_groups
                             SET status = 'RETURNED', inspected_by = ?,
-                                inspected_at = CURRENT_TIMESTAMP
+                                inspected_at = datetime('now', '+8 hours')
                             WHERE group_id = ? AND status = 'RECEIVED'
                             """)) {
                         statement.setLong(1, actorId);
@@ -144,7 +144,7 @@ public abstract class BorrowRequestServicePart6 extends BorrowRequestServicePart
                 if (!requestStatus.equals(nextStatus)) {
                     try (PreparedStatement statement = connection.prepareStatement("""
                             UPDATE borrow_requests
-                            SET status = ?, updated_at = CURRENT_TIMESTAMP
+                            SET status = ?, updated_at = datetime('now', '+8 hours')
                             WHERE request_id = ?
                             """)) {
                         statement.setString(1, nextStatus);
@@ -227,7 +227,7 @@ public abstract class BorrowRequestServicePart6 extends BorrowRequestServicePart
                 String updateSql = """
                         UPDATE borrow_requests
                         SET status = ?, %s = ?, remarks = ?,
-                            updated_at = CURRENT_TIMESTAMP
+                            updated_at = datetime('now', '+8 hours')
                         WHERE request_id = ?
                         """.formatted(statusColumn);
                 try (PreparedStatement statement = connection.prepareStatement(updateSql)) {

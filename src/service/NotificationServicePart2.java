@@ -1,6 +1,7 @@
 package src.service;
 
 import src.database.Database;
+import src.database.Sql;
 import src.model.Notification;
 import src.model.RequestStatus;
 import src.util.UndoPolicy;
@@ -27,7 +28,7 @@ public abstract class NotificationServicePart2 extends NotificationServicePart1 
     /**
      * Flags work that was not processed before its schedule and notifies the
      * responsible people once. Safe to call from several clients: each overdue row
-     * is claimed with an atomic UPDATE ... RETURNING.
+     * is claimed with an atomic UPDATE ... RETURNING inside one write transaction.
      */
     public void runOverdueSweep() throws SQLException {
         Timestamp now = Timestamp.valueOf(
@@ -38,7 +39,7 @@ public abstract class NotificationServicePart2 extends NotificationServicePart1 
                 // 1. A department never approved or declined before the schedule started.
                 Map<Long, Set<String>> notAssigned = new HashMap<>();
                 try (PreparedStatement statement = connection.prepareStatement("""
-                        UPDATE request_groups rg
+                        UPDATE request_groups AS rg
                         SET overdue_notified = TRUE
                         WHERE rg.status = 'PENDING' AND rg.overdue_notified = FALSE
                           AND EXISTS (
@@ -46,16 +47,16 @@ public abstract class NotificationServicePart2 extends NotificationServicePart1 
                               WHERE br.request_id = rg.request_id AND br.status = 'PENDING_STAFF'
                           )
                           AND (
-                              SELECT COALESCE(ro.event_date, br.event_date)
-                                     + COALESCE(ro.start_time, br.start_time)
+                              SELECT COALESCE(ro.event_date, br.event_date) || ' '
+                                     || COALESCE(ro.start_time, br.start_time)
                               FROM borrow_requests br
                               LEFT JOIN request_occurrences ro
                                      ON ro.occurrence_id = rg.occurrence_id
                               WHERE br.request_id = rg.request_id
                           ) < ?
-                        RETURNING rg.request_id, rg.custodian_role
+                        RETURNING request_id, custodian_role
                         """)) {
-                    statement.setTimestamp(1, now);
+                    Sql.setTimestamp(statement, 1, now);
                     try (ResultSet result = statement.executeQuery()) {
                         while (result.next()) {
                             notAssigned.computeIfAbsent(result.getLong(1), k -> new HashSet<>())
@@ -84,18 +85,18 @@ public abstract class NotificationServicePart2 extends NotificationServicePart1 
                 // 2. Admin or director review did not happen before the schedule started.
                 Map<Long, String> lateReview = new HashMap<>();
                 try (PreparedStatement statement = connection.prepareStatement("""
-                        UPDATE borrow_requests br
+                        UPDATE borrow_requests AS br
                         SET overdue_notified = TRUE
                         WHERE br.status IN ('PENDING_ADMIN', 'PENDING_DIRECTOR')
                           AND br.overdue_notified = FALSE
-                          AND LEAST(br.event_date + br.start_time, COALESCE((
-                                  SELECT MIN(ro.event_date + ro.start_time)
+                          AND MIN(br.event_date || ' ' || br.start_time, COALESCE((
+                                  SELECT MIN(ro.event_date || ' ' || ro.start_time)
                                   FROM request_occurrences ro
                                   WHERE ro.request_id = br.request_id
-                              ), br.event_date + br.start_time)) < ?
-                        RETURNING br.request_id, br.status
+                              ), br.event_date || ' ' || br.start_time)) < ?
+                        RETURNING request_id, status
                         """)) {
-                    statement.setTimestamp(1, now);
+                    Sql.setTimestamp(statement, 1, now);
                     try (ResultSet result = statement.executeQuery()) {
                         while (result.next()) {
                             lateReview.put(result.getLong(1), result.getString(2));
@@ -116,7 +117,7 @@ public abstract class NotificationServicePart2 extends NotificationServicePart1 
                 // 3. Approved equipment was never released before the schedule ended.
                 Map<Long, Set<String>> notReleased = new HashMap<>();
                 try (PreparedStatement statement = connection.prepareStatement("""
-                        UPDATE request_groups rg
+                        UPDATE request_groups AS rg
                         SET overdue_notified = TRUE
                         WHERE rg.status = 'ASSIGNED' AND rg.overdue_notified = FALSE
                           AND EXISTS (
@@ -125,16 +126,16 @@ public abstract class NotificationServicePart2 extends NotificationServicePart1 
                                 AND br.status IN ('APPROVED', 'RELEASED')
                           )
                           AND (
-                              SELECT COALESCE(ro.event_date, br.event_date)
-                                     + COALESCE(ro.end_time, br.end_time)
+                              SELECT COALESCE(ro.event_date, br.event_date) || ' '
+                                     || COALESCE(ro.end_time, br.end_time)
                               FROM borrow_requests br
                               LEFT JOIN request_occurrences ro
                                      ON ro.occurrence_id = rg.occurrence_id
                               WHERE br.request_id = rg.request_id
                           ) < ?
-                        RETURNING rg.request_id, rg.custodian_role
+                        RETURNING request_id, custodian_role
                         """)) {
-                    statement.setTimestamp(1, now);
+                    Sql.setTimestamp(statement, 1, now);
                     try (ResultSet result = statement.executeQuery()) {
                         while (result.next()) {
                             notReleased.computeIfAbsent(result.getLong(1), k -> new HashSet<>())
@@ -159,20 +160,20 @@ public abstract class NotificationServicePart2 extends NotificationServicePart1 
                 // 4. Released equipment needs inspection once the usage period ends.
                 Map<Long, Set<String>> awaitingInspection = new HashMap<>();
                 try (PreparedStatement statement = connection.prepareStatement("""
-                        UPDATE request_groups rg
+                        UPDATE request_groups AS rg
                         SET return_notified = TRUE
                         WHERE rg.status = 'RELEASED' AND rg.return_notified = FALSE
                           AND (
-                              SELECT COALESCE(ro.event_date, br.event_date)
-                                     + COALESCE(ro.end_time, br.end_time)
+                              SELECT COALESCE(ro.event_date, br.event_date) || ' '
+                                     || COALESCE(ro.end_time, br.end_time)
                               FROM borrow_requests br
                               LEFT JOIN request_occurrences ro
                                      ON ro.occurrence_id = rg.occurrence_id
                               WHERE br.request_id = rg.request_id
                           ) < ?
-                        RETURNING rg.request_id, rg.custodian_role
+                        RETURNING request_id, custodian_role
                         """)) {
-                    statement.setTimestamp(1, now);
+                    Sql.setTimestamp(statement, 1, now);
                     try (ResultSet result = statement.executeQuery()) {
                         while (result.next()) {
                             awaitingInspection.computeIfAbsent(
@@ -210,7 +211,7 @@ public abstract class NotificationServicePart2 extends NotificationServicePart1 
                 FROM notifications
                 WHERE user_id = ?
                   AND title = 'Pending request reminder'
-                  AND created_at::date = CURRENT_DATE
+                  AND date(created_at) = date('now', '+8 hours')
                 LIMIT 1
                 """;
         try (Connection connection = Database.getConnection();
@@ -257,10 +258,10 @@ public abstract class NotificationServicePart2 extends NotificationServicePart1 
                   AND COALESCE(u.notifications_enabled, TRUE) = TRUE
                   AND br.status IN ('APPROVED', 'RELEASED')
                   AND COALESCE(ro.release_notified, FALSE) = FALSE
-                  AND (ro.event_date::timestamp + ro.start_time)
-                      <= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila') + INTERVAL '1 day')
-                  AND (ro.event_date::timestamp + ro.start_time)
-                      >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila') - INTERVAL '2 hours')
+                  AND (ro.event_date || ' ' || ro.start_time)
+                      <= datetime('now', '+8 hours', '+1 day')
+                  AND (ro.event_date || ' ' || ro.start_time)
+                      >= datetime('now', '+8 hours', '-2 hours')
                 """;
         try (Connection connection = Database.getConnection()) {
             connection.setAutoCommit(false);
@@ -272,8 +273,8 @@ public abstract class NotificationServicePart2 extends NotificationServicePart1 
                         long reqId = rs.getLong("request_id");
                         String code = rs.getString("request_code");
                         String msg = "Reminder: equipment release for " + code + " is scheduled on "
-                                + rs.getDate("event_date").toLocalDate() + " "
-                                + rs.getTime("start_time").toLocalTime()
+                                + Sql.getDate(rs, "event_date").toLocalDate() + " "
+                                + Sql.getTime(rs, "start_time").toLocalTime()
                                 + " at " + rs.getString("venue") + ".";
                         try (PreparedStatement ins = connection.prepareStatement("""
                                 INSERT INTO notifications (user_id, request_id, occurrence_id, title, message, action)

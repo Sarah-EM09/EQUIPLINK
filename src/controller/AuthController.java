@@ -9,6 +9,7 @@ import java.util.List;
 public class AuthController {
 
     private final AuthService authService;
+    private final src.service.RecoveryService recoveryService = new src.service.RecoveryService();
 
     public AuthController(AuthService authService) {
         this.authService = authService;
@@ -103,5 +104,28 @@ public class AuthController {
             throw new SecurityException("A signed-in ICT account is required.");
         }
         authService.deleteBorrowerAccount(actor.getRole(), userId);
+    }
+
+    // ACCOUNT RECOVERY (administrator accounts)
+    public List<String> generateRecoveryCodes(User actor) throws Exception {
+        return recoveryService.generateCodes(actor.getUserId());
+    }
+
+    public int remainingRecoveryCodes(User actor) throws Exception {
+        return recoveryService.remainingCodes(actor.getUserId());
+    }
+
+    public void resetWithRecoveryCode(String usernameOrEmail, String code, char[] newPassword)
+            throws Exception {
+        recoveryService.resetWithCode(usernameOrEmail, code, newPassword);
+    }
+
+    public boolean mustChangePassword(User user) throws Exception {
+        return recoveryService.mustChangePassword(user.getUserId());
+    }
+
+    public static boolean isAdministrator(User user) {
+        String role = user == null || user.getRole() == null ? "" : user.getRole();
+        return role.equals("ICT_STAFF") || role.equals("ADMIN") || role.equals("DIRECTOR");
     }
 }

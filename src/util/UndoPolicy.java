@@ -12,8 +12,12 @@ public final class UndoPolicy {
     /** Number of minutes a deleted request or notification can be restored. */
     public static final int RECOVERY_MINUTES = 10;
 
-    /** SQL interval matching {@link #RECOVERY_MINUTES}; kept here so both stay in sync. */
-    public static final String RECOVERY_SQL = "INTERVAL '10 minutes'";
+    /**
+     * SQL for the start of the recovery window (now minus {@link #RECOVERY_MINUTES},
+     * Philippine time); kept here so both stay in sync.
+     */
+    public static final String RECOVERY_SQL =
+            "datetime('now', '+8 hours', '-" + RECOVERY_MINUTES + " minutes')";
 
     /** Human-readable window used in confirmation and Undo messages. */
     public static final String RECOVERY_LABEL = RECOVERY_MINUTES + " minutes";

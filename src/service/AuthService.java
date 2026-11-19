@@ -60,7 +60,7 @@ public class AuthService extends AuthServicePart2 {
                         long userId;
                         try (PreparedStatement statement = connection.prepareStatement("""
                                 UPDATE password_reset_requests
-                                SET status = ?, reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP,
+                                SET status = ?, reviewed_by = ?, reviewed_at = datetime('now', '+8 hours'),
                                     review_note = ?
                                 WHERE reset_request_id = ? AND status = 'PENDING'
                                 RETURNING user_id

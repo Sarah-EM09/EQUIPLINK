@@ -1,6 +1,7 @@
 package src.service;
 
 import src.database.Database;
+import src.database.Sql;
 import src.model.BorrowRequest;
 import src.model.BorrowRequestForm;
 import src.model.DepartmentStatus;
@@ -193,9 +194,9 @@ public abstract class BorrowRequestServicePart3 extends BorrowRequestServicePart
             statement.setString(1, code);
             statement.setLong(2, borrowerId);
             statement.setString(3, first.getVenue());
-            statement.setDate(4, Date.valueOf(first.getEventDate()));
-            statement.setTime(5, Time.valueOf(first.getStartTime()));
-            statement.setTime(6, Time.valueOf(first.getEndTime()));
+            Sql.setDate(statement, 4, first.getEventDate());
+            Sql.setTime(statement, 5, first.getStartTime());
+            Sql.setTime(statement, 6, first.getEndTime());
             statement.setString(7, form.getPurpose());
             statement.setString(8, form.getParticipants());
             statement.setString(9, form.getPersonInCharge());
@@ -219,9 +220,9 @@ public abstract class BorrowRequestServicePart3 extends BorrowRequestServicePart
                 """, Statement.RETURN_GENERATED_KEYS)) {
             for (RequestOccurrence o : effectiveOccurrences(form)) {
                 statement.setLong(1, requestId);
-                statement.setDate(2, Date.valueOf(o.getEventDate()));
-                statement.setTime(3, Time.valueOf(o.getStartTime()));
-                statement.setTime(4, Time.valueOf(o.getEndTime()));
+                Sql.setDate(statement, 2, o.getEventDate());
+                Sql.setTime(statement, 3, o.getStartTime());
+                Sql.setTime(statement, 4, o.getEndTime());
                 statement.setString(5, o.getVenue());
                 statement.executeUpdate();
                 try (ResultSet keys = statement.getGeneratedKeys()) {
@@ -239,9 +240,9 @@ public abstract class BorrowRequestServicePart3 extends BorrowRequestServicePart
         List<RequestOccurrence> occs = effectiveOccurrences(form);
         RequestOccurrence first = occs.get(0);
         statement.setString(1 + offset, first.getVenue());
-        statement.setDate(2 + offset, Date.valueOf(first.getEventDate()));
-        statement.setTime(3 + offset, Time.valueOf(first.getStartTime()));
-        statement.setTime(4 + offset, Time.valueOf(first.getEndTime()));
+        Sql.setDate(statement, 2 + offset, first.getEventDate());
+        Sql.setTime(statement, 3 + offset, first.getStartTime());
+        Sql.setTime(statement, 4 + offset, first.getEndTime());
         statement.setString(5 + offset, form.getPurpose());
         statement.setString(6 + offset, form.getParticipants());
         statement.setString(7 + offset, form.getPersonInCharge());
@@ -276,7 +277,6 @@ public abstract class BorrowRequestServicePart3 extends BorrowRequestServicePart
                 SELECT status
                 FROM borrow_requests
                 WHERE request_id = ? AND borrower_id = ? AND deleted_at IS NULL
-                FOR UPDATE
                 """)) {
             statement.setLong(1, requestId);
             statement.setLong(2, borrowerId);

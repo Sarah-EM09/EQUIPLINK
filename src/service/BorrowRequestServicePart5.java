@@ -70,7 +70,7 @@ public abstract class BorrowRequestServicePart5 extends BorrowRequestServicePart
                 try (PreparedStatement statement = connection.prepareStatement("""
                         UPDATE request_groups
                         SET status = 'DECLINED', declined_by = ?,
-                            declined_at = CURRENT_TIMESTAMP, staff_remarks = ?
+                            declined_at = datetime('now', '+8 hours'), staff_remarks = ?
                         WHERE group_id IN (%s) AND status = 'PENDING'
                         """.formatted(placeholders(pending.size())))) {
                     statement.setLong(1, actorId);
@@ -164,7 +164,7 @@ public abstract class BorrowRequestServicePart5 extends BorrowRequestServicePart
                 }
                 try (PreparedStatement statement = connection.prepareStatement("""
                         UPDATE borrow_requests
-                        SET status = 'NEEDS_ACTION', remarks = ?, updated_at = CURRENT_TIMESTAMP
+                        SET status = 'NEEDS_ACTION', remarks = ?, updated_at = datetime('now', '+8 hours')
                         WHERE request_id = ?
                         """)) {
                     statement.setString(1, remarks.trim());
@@ -212,7 +212,7 @@ public abstract class BorrowRequestServicePart5 extends BorrowRequestServicePart
                 // Mark every released department group as received, with the borrower
                 // and timestamp kept on the group for Transaction History.
                 try (PreparedStatement ps = connection.prepareStatement(
-                        "UPDATE request_groups SET status='RECEIVED', received_by=?, received_at=CURRENT_TIMESTAMP "
+                        "UPDATE request_groups SET status='RECEIVED', received_by=?, received_at=datetime('now', '+8 hours') "
                                 + "WHERE request_id=? AND status='RELEASED'")) {
                     ps.setLong(1, borrowerId);
                     ps.setLong(2, requestId);

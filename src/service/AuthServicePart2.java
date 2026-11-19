@@ -1,6 +1,7 @@
 package src.service;
 
 import src.database.Database;
+import src.database.Sql;
 import src.model.PasswordResetRequest;
 import src.model.User;
 import src.util.PasswordHasher;
@@ -37,7 +38,7 @@ public abstract class AuthServicePart2 extends AuthServicePart1 {
         try {
             insertBorrower(username, email, fullName, department, "FACULTY", password);
         } catch (java.sql.SQLException exception) {
-            if ("23505".equals(exception.getSQLState())) {
+            if (Sql.isUniqueViolation(exception)) {
                 throw new IllegalArgumentException(
                         "That username or email is already in use.");
             }
@@ -63,7 +64,6 @@ public abstract class AuthServicePart2 extends AuthServicePart1 {
                                 SELECT user_id, email, role
                                 FROM users
                                 WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?)
-                                FOR UPDATE
                                 """)) {
                             String identity = usernameOrEmail.trim();
                             statement.setString(1, identity);
@@ -91,7 +91,6 @@ public abstract class AuthServicePart2 extends AuthServicePart1 {
                                   AND registered_email_match = TRUE AND identity_verified = TRUE
                                 ORDER BY requested_at DESC
                                 LIMIT 1
-                                FOR UPDATE
                                 """)) {
                             statement.setLong(1, userId);
                             try (ResultSet result = statement.executeQuery()) {
@@ -163,7 +162,7 @@ public abstract class AuthServicePart2 extends AuthServicePart1 {
                                 result.getString("email"),
                                 result.getString("role"),
                                 result.getString("department"),
-                                result.getTimestamp("requested_at").toLocalDateTime(),
+                                Sql.getTimestamp(result, "requested_at").toLocalDateTime(),
                                 result.getBoolean("registered_email_match"),
                                 result.getBoolean("identity_verified")));
                     }
@@ -214,7 +213,7 @@ public abstract class AuthServicePart2 extends AuthServicePart1 {
                                 "This borrower account no longer exists.");
                     }
                 } catch (java.sql.SQLException exception) {
-                    if ("23503".equals(exception.getSQLState())) {
+                    if (Sql.isForeignKeyViolation(exception)) {
                         throw new IllegalStateException(
                                 "This account is linked to existing requests or records and "
                                         + "cannot be deleted without removing that history.",

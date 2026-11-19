@@ -1,6 +1,7 @@
 package src.service;
 
 import src.database.Database;
+import src.database.Sql;
 import src.model.PasswordResetRequest;
 import src.model.User;
 import src.util.PasswordHasher;
@@ -116,7 +117,7 @@ public abstract class AuthServicePart1 {
         try {
             insertBorrower(username, email, fullName, department, "STUDENT", password);
         } catch (java.sql.SQLException exception) {
-            if ("23505".equals(exception.getSQLState())) {
+            if (Sql.isUniqueViolation(exception)) {
                 throw new IllegalArgumentException(
                         "That username or email is already in use.");
             }
@@ -218,7 +219,8 @@ public abstract class AuthServicePart1 {
                     UPDATE users
                     SET password_hash = ?,
                         password_salt = ?,
-                        password_iterations = ?
+                        password_iterations = ?,
+                        must_change_password = FALSE
                     WHERE user_id = ?
                     """;
 
@@ -269,7 +271,6 @@ public abstract class AuthServicePart1 {
                         SELECT user_id, email
                         FROM users
                         WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?)
-                        FOR UPDATE
                         """)) {
                     String identity = usernameOrEmail.trim();
                     statement.setString(1, identity);
@@ -293,7 +294,6 @@ public abstract class AuthServicePart1 {
                         FROM password_reset_requests
                         WHERE user_id = ? AND status IN ('PENDING', 'APPROVED')
                           AND registered_email_match = TRUE AND identity_verified = TRUE
-                        FOR UPDATE
                         """)) {
                     statement.setLong(1, userId);
                     try (ResultSet result = statement.executeQuery()) {

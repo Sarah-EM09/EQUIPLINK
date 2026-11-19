@@ -1,6 +1,7 @@
 package src.service;
 
 import src.database.Database;
+import src.database.Sql;
 import src.model.BorrowRequest;
 import src.model.BorrowRequestForm;
 import src.model.DepartmentStatus;
@@ -190,9 +191,9 @@ public class BorrowRequestService extends BorrowRequestServicePart7 {
         try (Connection connection = Database.getConnection()) {
             try (PreparedStatement statement = connection.prepareStatement("""
                     SELECT DISTINCT request_id FROM request_history
-                    WHERE request_id IS NOT NULL AND CAST(created_at AS DATE) = ?
+                    WHERE request_id IS NOT NULL AND date(created_at) = ?
                     """)) {
-                statement.setDate(1, Date.valueOf(effectiveDay));
+                Sql.setDate(statement, 1, effectiveDay);
                 try (ResultSet result = statement.executeQuery()) {
                     while (result.next()) {
                         activeIds.add(result.getLong("request_id"));
@@ -205,11 +206,11 @@ public class BorrowRequestService extends BorrowRequestServicePart7 {
             try (PreparedStatement statement = connection.prepareStatement("""
                     SELECT DISTINCT request_id FROM notifications
                     WHERE request_id IS NOT NULL
-                      AND CAST(created_at AS DATE) = ?
+                      AND date(created_at) = ?
                       AND action IN ('OVERDUE', 'RETURN_INSPECTION')
                       AND (? IS NULL OR department = ?)
                     """)) {
-                statement.setDate(1, Date.valueOf(effectiveDay));
+                Sql.setDate(statement, 1, effectiveDay);
                 statement.setObject(2, department, Types.VARCHAR);
                 statement.setObject(3, department, Types.VARCHAR);
                 try (ResultSet result = statement.executeQuery()) {
@@ -332,7 +333,7 @@ public class BorrowRequestService extends BorrowRequestServicePart7 {
                 while (rs.next()) {
                     BorrowRequestBuilder b = builders.get(rs.getLong("request_id"));
                     if (b == null) continue;
-                    LocalDate date = rs.getDate("event_date").toLocalDate();
+                    LocalDate date = Sql.getDate(rs, "event_date").toLocalDate();
                     long occurrence = rs.getLong("occurrence_id");
                     Long occurrenceId = rs.wasNull() ? null : occurrence;
                     b.departments.add(new DepartmentStatus(
@@ -340,17 +341,17 @@ public class BorrowRequestService extends BorrowRequestServicePart7 {
                             rs.getString("custodian_role"),
                             rs.getString("status"),
                             occurrenceId,
-                            LocalDateTime.of(date, rs.getTime("start_time").toLocalTime()),
-                            LocalDateTime.of(date, rs.getTime("end_time").toLocalTime()),
+                            LocalDateTime.of(date, Sql.getTime(rs, "start_time").toLocalTime()),
+                            LocalDateTime.of(date, Sql.getTime(rs, "end_time").toLocalTime()),
                             rs.getString("staff_remarks"),
                             rs.getString("decided_by"),
-                            toDateTime(rs.getTimestamp("decided_at")),
+                            toDateTime(Sql.getTimestamp(rs, "decided_at")),
                             rs.getString("released_by"),
-                            toDateTime(rs.getTimestamp("released_at")),
+                            toDateTime(Sql.getTimestamp(rs, "released_at")),
                             rs.getString("received_by"),
-                            toDateTime(rs.getTimestamp("received_at")),
+                            toDateTime(Sql.getTimestamp(rs, "received_at")),
                             rs.getString("inspected_by"),
-                            toDateTime(rs.getTimestamp("inspected_at"))));
+                            toDateTime(Sql.getTimestamp(rs, "inspected_at"))));
                 }
             }
         }

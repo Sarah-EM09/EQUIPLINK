@@ -66,7 +66,7 @@ public abstract class BorrowRequestServicePart2 extends BorrowRequestServicePart
                 SET status = ?,
                     remarks = CASE WHEN ? THEN 'All departments declined their equipment.'
                                    ELSE remarks END,
-                    updated_at = CURRENT_TIMESTAMP
+                    updated_at = datetime('now', '+8 hours')
                 WHERE request_id = ?
                 """)) {
             statement.setString(1, nextStatus);
@@ -100,7 +100,7 @@ public abstract class BorrowRequestServicePart2 extends BorrowRequestServicePart
                     // Final confirmation deducts stock; lock the item so concurrent
                     // releases cannot hand out more units than are on hand.
                     try (PreparedStatement lock = connection.prepareStatement(
-                            "SELECT 1 FROM equipment WHERE equipment_id = ? FOR UPDATE")) {
+                            "SELECT 1 FROM equipment WHERE equipment_id = ?")) {
                         lock.setLong(1, assignedId);
                         lock.executeQuery().close();
                     }
