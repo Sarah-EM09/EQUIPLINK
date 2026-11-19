@@ -76,6 +76,10 @@ jobs:
           cp room.md build/classes/room.md
           printf 'version=%s\nrepo=%s\n' "$VERSION" "$GITHUB_REPOSITORY" \
             > build/classes/equiplink.properties
+          # Bake the Neon sync URL in so installed copies sync from day one.
+          if [ -n "${{ secrets.EQUIPLINK_NEON_URL }}" ]; then
+            printf 'neon.url=%s\n' "${{ secrets.EQUIPLINK_NEON_URL }}" >> build/classes/equiplink.properties
+          fi
           CP=$(cd lib && ls *.jar | tr '\n' ' ')
           printf 'Main-Class: src.Main\nClass-Path: %s\n' "$CP" > build/manifest.txt
           jar cfm build/input/equiplink.jar build/manifest.txt -C build/classes .
