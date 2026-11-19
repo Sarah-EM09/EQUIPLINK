@@ -18,6 +18,7 @@ import src.ui.SplashWindow;
 import src.util.AppInfo;
 import src.util.Updater;
 import src.ui.UiSupport;
+import src.sync.SyncService;
 
 import javax.swing.*;
 import java.sql.SQLException;
@@ -51,6 +52,8 @@ public class Main {
             DatabaseInitializer.initializeDatabase();
 
             DatabaseSeeder.seedAccounts();
+
+            SyncService.get().start();
 
             System.out.println("EquipLink is ready.");
 

@@ -2,6 +2,7 @@ package src.ui;
 
 import src.controller.AuthController;
 import src.model.User;
+import src.sync.SyncService;
 import src.ui.components.PrimaryButton;
 import src.ui.components.SurfacePanel;
 
@@ -11,6 +12,7 @@ import javax.swing.JCheckBox;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
@@ -51,6 +53,8 @@ public class SettingsPanel extends JPanel {
             add(Box.createVerticalStrut(10));
         }
         add(systemInformation());
+        add(Box.createVerticalStrut(10));
+        add(syncSettings());
     }
 
     private JPanel appearanceSettings(Runnable onThemeChange) {
@@ -145,6 +149,31 @@ public class SettingsPanel extends JPanel {
                 "Contact your campus system administrator for assistance.");
         panel.add(details, BorderLayout.CENTER);
         return panel;
+    }
+
+    private JPanel syncSettings() {
+        SurfacePanel panel = section(
+                "Synchronization", "Changes on this computer sync to Neon.");
+        JLabel status = new JLabel("Working offline (Neon sync is not configured)");
+        status.setFont(AppTheme.regular(11));
+        status.setForeground(AppTheme.foreground());
+        panel.add(status, BorderLayout.CENTER);
+        SyncService.get().addListener(
+                latest -> SwingUtilities.invokeLater(() -> updateSyncStatus(status, latest)));
+        return panel;
+    }
+
+    private void updateSyncStatus(JLabel status, SyncService.Status latest) {
+        String text = switch (latest.state()) {
+            case ONLINE -> "Online · synced";
+            case SYNCING -> "Syncing with Neon...";
+            case DISABLED -> "Working offline (Neon sync is not configured)";
+            case OFFLINE -> "Offline · changes are saved on this computer";
+        };
+        if (latest.pending() > 0) {
+            text += " · " + latest.pending() + " pending";
+        }
+        status.setText(text);
     }
 
     private SurfacePanel section(String titleText, String subtitleText) {

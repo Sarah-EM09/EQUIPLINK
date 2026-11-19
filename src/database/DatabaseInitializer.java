@@ -19,7 +19,8 @@ public final class DatabaseInitializer {
     /** MIGRATIONS.get(i) upgrades the database from version i to i + 1. */
     static final List<List<String>> MIGRATIONS = List.of(
             SchemaV1.STATEMENTS,
-            SchemaV2.STATEMENTS
+            SchemaV2.STATEMENTS,
+            SchemaV3.STATEMENTS
     );
 
     private DatabaseInitializer() {

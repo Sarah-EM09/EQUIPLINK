@@ -123,9 +123,10 @@ public class DatabaseSeeder {
                     borrower_type,
                     full_name,
                     department,
-                    active
+                    active,
+                    sync_uuid
                 )
-                VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, TRUE)
+                VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, TRUE, ?)
                 """;
 
         try (PreparedStatement statement = connection.prepareStatement(insertSql)) {
@@ -138,8 +139,18 @@ public class DatabaseSeeder {
             statement.setString(6, role);
             statement.setString(7, fullName);
             statement.setString(8, department);
+            // Same sync id on every computer, so default accounts merge in Neon.
+            statement.setString(9, src.sync.SyncTables.seedUuid(username));
 
             statement.executeUpdate();
+
+            // Mark the default row as older than any real change, so a newly installed
+            // computer never overwrites an account another computer already updated.
+            try (PreparedStatement age = connection.prepareStatement(
+                    "UPDATE sync_outbox SET changed_at = '2000-01-01 00:00:00.000' "
+                            + "WHERE table_name = 'users' AND row_id = last_insert_rowid()")) {
+                age.executeUpdate();
+            }
 
             System.out.println(
                     username + " account created successfully.");
