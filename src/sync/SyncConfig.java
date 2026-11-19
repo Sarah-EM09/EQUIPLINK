@@ -10,15 +10,19 @@ import java.nio.file.Path;
 import java.util.Properties;
 
 /**
- * Where to find the Neon connection string. First match wins:
+ * Where to find the Neon connection string. Built in first, then first match wins:
  * <ol>
  *   <li>{@code -Dequiplink.neon.url=...} or the {@code EQUIPLINK_NEON_URL} environment variable;</li>
  *   <li>{@code neon.properties} ({@code url=postgresql://...}) next to the local database file;</li>
  *   <li>{@code neon.url} baked into the release build (equiplink.properties).</li>
  * </ol>
- * With none of these the app simply stays offline-only.
+ * The built-in value is always present; the others are a fallback.
  */
 public final class SyncConfig {
+
+    /** Built in: EquipLink's Neon project connection string, so Neon needs no manual setup. */
+    static final String BUILT_IN_URL =
+            "postgresql://equiplink_app:rCet7ttyCrSLCVkkGarWX7L2mwpnwuuh@ep-floral-hill-bivqcw3d-pooler.c-5.ap-southeast-1.aws.neon.tech/equiplink?channel_binding=require&sslmode=require";
 
     private SyncConfig() {
     }
@@ -30,7 +34,10 @@ public final class SyncConfig {
     }
 
     static String connectionString() {
-        String value = System.getProperty("equiplink.neon.url");
+        String value = BUILT_IN_URL;
+        if (blank(value)) {
+            value = System.getProperty("equiplink.neon.url");
+        }
         if (blank(value)) {
             value = System.getenv("EQUIPLINK_NEON_URL");
         }
