@@ -63,11 +63,11 @@ public final class SyncService {
         scheduler.scheduleWithFixedDelay(this::runOnce, 0, INTERVAL_SECONDS, TimeUnit.SECONDS);
     }
 
-    /** Requests a sync soon (e.g. right after the user saves something). */
+    /** Kicks off a sync as soon as possible (e.g. right after the user creates an account). */
     public void syncSoon() {
         ScheduledExecutorService current = scheduler;
         if (current != null) {
-            current.schedule(this::runOnce, 1, TimeUnit.SECONDS);
+            current.execute(this::runOnce);
         }
     }
 

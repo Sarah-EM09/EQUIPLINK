@@ -4,6 +4,7 @@ import src.database.Database;
 import src.database.Sql;
 import src.model.PasswordResetRequest;
 import src.model.User;
+import src.sync.SyncService;
 import src.util.PasswordHasher;
 
 import java.sql.Connection;
@@ -44,6 +45,7 @@ public abstract class AuthServicePart2 extends AuthServicePart1 {
             }
             throw exception;
         }
+        SyncService.get().syncSoon();
     }
 
     public void resetPasswordAfterApproval(
@@ -212,6 +214,7 @@ public abstract class AuthServicePart2 extends AuthServicePart1 {
                         throw new IllegalArgumentException(
                                 "This borrower account no longer exists.");
                     }
+                    SyncService.get().syncSoon();
                 } catch (java.sql.SQLException exception) {
                     if (Sql.isForeignKeyViolation(exception)) {
                         throw new IllegalStateException(

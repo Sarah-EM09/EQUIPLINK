@@ -4,6 +4,7 @@ import src.database.Database;
 import src.database.Sql;
 import src.model.PasswordResetRequest;
 import src.model.User;
+import src.sync.SyncService;
 import src.util.PasswordHasher;
 
 import java.sql.Connection;
@@ -123,6 +124,7 @@ public abstract class AuthServicePart1 {
             }
             throw exception;
         }
+        SyncService.get().syncSoon();
     }
 
     void insertBorrower(
